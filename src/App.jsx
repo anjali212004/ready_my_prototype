@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import FileUpload from "./components/FileUpload";
 import DocumentViewer from "./components/DocumentViewer";
+import OrientationScreen from "./components/OrientationScreen";
 import { parseTxt } from "./utils/parseTxt";
 import { parsePdf } from "./utils/parsePdf";
 import { splitParagraphs } from "./utils/splitParagraph";
@@ -9,18 +10,21 @@ import { splitParagraphs } from "./utils/splitParagraph";
 function App() {
   const [document, setDocument] = useState(null);
   const [error, setError] = useState("");
+  const [orientationCompleted, setOrientationCompleted] = useState(false);
 
-  // Restore document from localStorage on refresh
+  // Restore document + orientation state on refresh
   useEffect(() => {
     const saved = localStorage.getItem("document");
     if (saved) {
-      setDocument(JSON.parse(saved));
+      const parsed = JSON.parse(saved);
+      setDocument(parsed);
+      setOrientationCompleted(parsed.orientationCompleted || false);
     }
   }, []);
 
   const handleFileProcessed = async (file) => {
     try {
-      setError(""); // clear previous errors
+      setError("");
 
       let extractedText = "";
 
@@ -38,13 +42,26 @@ function App() {
       const data = {
         rawText: extractedText,
         paragraphs,
+        orientationCompleted: false, // 🔑 important
       };
 
       localStorage.setItem("document", JSON.stringify(data));
       setDocument(data);
+      setOrientationCompleted(false);
     } catch (err) {
       setError(err.message || "Something went wrong while processing the file.");
     }
+  };
+
+  const handleOrientationContinue = () => {
+    const updated = {
+      ...document,
+      orientationCompleted: true,
+    };
+
+    localStorage.setItem("document", JSON.stringify(updated));
+    setDocument(updated);
+    setOrientationCompleted(true);
   };
 
   return (
@@ -55,22 +72,24 @@ function App() {
           Upload a document to begin reading
         </p>
 
+        {/* STEP 1: Upload */}
         {!document && (
           <>
             <FileUpload
               onFileProcessed={handleFileProcessed}
               setError={setError}
             />
-
-            {error && (
-              <div className="error-box">
-                {error}
-              </div>
-            )}
+            {error && <div className="error-box">{error}</div>}
           </>
         )}
 
-        {document && (
+        {/* STEP 2: Orientation (ONCE) */}
+        {document && !orientationCompleted && (
+          <OrientationScreen onContinue={handleOrientationContinue} />
+        )}
+
+        {/* STEP 3: Reading placeholder */}
+        {document && orientationCompleted && (
           <DocumentViewer document={document} />
         )}
       </div>
